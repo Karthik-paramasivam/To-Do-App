@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import * as moment from "moment";
+import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore"; // Import dayjs plugin
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -13,6 +14,8 @@ import "./App.css";
 
 const { TextArea } = Input;
 const { Option } = Select;
+
+dayjs.extend(isSameOrBefore); // Extend dayjs with the plugin
 
 function Todo() {
   const [form] = Form.useForm();
@@ -28,11 +31,18 @@ function Todo() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [status, setStatus] = useState("Pending");
+  const [searchText, setSearchText] = useState("");
+  const [filteredTasks, setFilteredTasks] = useState([]);
 
   useEffect(() => {
     const storedTasks = localStorage.getItem('tasks');
     if (storedTasks) {
+      const tasks = JSON.parse(storedTasks);
+ 
       setTasksList(JSON.parse(storedTasks));
+      setFilteredTasks(tasks);
+
+
     }
   }, []);
 
@@ -40,7 +50,7 @@ function Todo() {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   };
 
-    const styl = `
+  const styl = `
   .ant-modal .ant-modal-title {
     margin: 0;
     color: rgba(0, 0, 0, 0.88);
@@ -51,13 +61,12 @@ function Todo() {
     font-size: 18px;
 }`
 
-
   const onFinish = () => {
     const newTask = {
       id: tasksList.length + 1,
       task,
-      startDate,
-      endDate,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
       priority,
       remarks,
       status,
@@ -65,6 +74,7 @@ function Todo() {
 
     const updatedTasksList = [...tasksList, newTask];
     setTasksList(updatedTasksList);
+    setFilteredTasks(updatedTasksList);
     updateLocalStorage(updatedTasksList);
     form.resetFields();
     resetFormStates();
@@ -74,16 +84,41 @@ function Todo() {
   const onUpdate = () => {
     const updatedTasksList = tasksList.map((t) =>
       t.id === editingTaskId
-        ? { ...t, task, startDate, endDate, priority, remarks, status }
+        ? { ...t, task, startDate: startDate ? startDate.toISOString() : null, endDate: endDate ? endDate.toISOString() : null, priority, remarks, status }
         : t
     );
     
     setTasksList(updatedTasksList);
+    setFilteredTasks(updatedTasksList);
     updateLocalStorage(updatedTasksList);
     form.resetFields();
     resetFormStates();
     message.success("Task updated successfully!");
   };
+
+  const handleSearch = (e) => {
+    const value = e.target.value.toLowerCase();
+    setSearchText(value);
+
+    const filtered = tasksList.filter((task) => {
+      const taskText = task.task.toLowerCase();
+      const priorityText = task.priority.toLowerCase();
+      const statusText = task.status.toLowerCase();
+      const startDateText = task.startDate;
+      const endDateText = task.endDate;
+
+      return (
+        taskText.includes(value) ||
+        priorityText.includes(value) ||
+        statusText.includes(value) ||
+        startDateText.includes(value) ||
+        endDateText.includes(value)
+      );
+    });
+
+    setFilteredTasks(filtered);
+  };
+
 
   const closeModal = () => {
     setIsModalVisible(false);
@@ -104,6 +139,7 @@ function Todo() {
       task.id === id ? { ...task, status: "Completed" } : task
     );
     setTasksList(updatedTasksList);
+    setFilteredTasks(updatedTasksList);
     updateLocalStorage(updatedTasksList);
     message.success("Task marked as complete!");
   };
@@ -111,31 +147,32 @@ function Todo() {
   const deleteTask = (id) => {
     const updatedTasksList = tasksList.filter((task) => task.id !== id);
     setTasksList(updatedTasksList);
+    setFilteredTasks(updatedTasksList);
     updateLocalStorage(updatedTasksList);
     message.success("Task deleted successfully!");
   };
 
   const handleStartDateChange = (date) => {
-    const momentDate = moment(date);
-    if (momentDate.isValid()) {
-      if (endDate && endDate.isBefore(momentDate)) {
+    const dayjsDate = dayjs(date);
+    if (dayjsDate.isValid()) {
+      if (endDate && dayjsDate.isAfter(endDate)) {
         message.error("Start date cannot be after end date.");
         return;
       }
-      setStartDate(momentDate);
+      setStartDate(dayjsDate);
     } else {
       message.error("Invalid start date.");
     }
   };
   
   const handleEndDateChange = (date) => {
-    const momentDate = moment(date);
-    if (momentDate.isValid()) {
-      if (startDate && momentDate.isBefore(startDate)) {
+    const dayjsDate = dayjs(date);
+    if (dayjsDate.isValid()) {
+      if (startDate && dayjsDate.isBefore(startDate)) {
         message.error("End date cannot be before start date.");
         return;
       }
-      setEndDate(momentDate);
+      setEndDate(dayjsDate);
     } else {
       message.error("Invalid end date.");
     }
@@ -150,16 +187,16 @@ function Todo() {
     const taskToEdit = tasksList.find((task) => task.id === id);
     if (taskToEdit) {
       setTask(taskToEdit.task);
-      setStartDate(taskToEdit.startDate ? moment(taskToEdit.startDate) : null);
-      setEndDate(taskToEdit.endDate ? moment(taskToEdit.endDate) : null);
+      setStartDate(taskToEdit.startDate ? dayjs(taskToEdit.startDate) : null);
+      setEndDate(taskToEdit.endDate ? dayjs(taskToEdit.endDate) : null);
       setPriority(taskToEdit.priority);
       setStatus(taskToEdit.status);
       setRemarks(taskToEdit.remarks);
       setEditingTaskId(id);
       form.setFieldsValue({
         task: taskToEdit.task,
-        startdate: taskToEdit.startDate ? moment(taskToEdit.startDate) : null,
-        enddate: taskToEdit.endDate ? moment(taskToEdit.endDate) : null,
+        startdate: taskToEdit.startDate ? dayjs(taskToEdit.startDate) : null,
+        enddate: taskToEdit.endDate ? dayjs(taskToEdit.endDate) : null,
         status: taskToEdit.status,
         priority: taskToEdit.priority,
         remarks: taskToEdit.remarks,
@@ -349,11 +386,22 @@ function Todo() {
         </Row>
 
         <Container className="container border border-white">
+
+              <Row className="mt-3 row">
+            <Col className="col-12 col-lg-6 m-auto">
+              <Input.Search
+                placeholder="Search tasks..."
+                value={searchText}
+                onChange={handleSearch}
+                enterButton
+              />
+            </Col>
+          </Row>
           <Row className="row mt-5">
             <Col className="col-12">
               <Table
                 columns={columns}
-                dataSource={tasksList}
+                dataSource={filteredTasks}
                 rowKey="id"
                 pagination={{ pageSize: 10 }}
                 size="large"
@@ -365,8 +413,8 @@ function Todo() {
           {selectedTask && (
             <>
               <p><strong>Task:</strong> {selectedTask.task}</p>
-              <p><strong>Start Date:</strong> {selectedTask.startDate ? moment(selectedTask.startDate).format("YYYY-MM-DD") : "N/A"}</p>
-              <p><strong>End Date:</strong> {selectedTask.endDate ? moment(selectedTask.endDate).format("YYYY-MM-DD") : "N/A"}</p>
+              <p><strong>Start Date:</strong> {selectedTask.startDate ? dayjs(selectedTask.startDate).format("YYYY-MM-DD") : "N/A"}</p>
+              <p><strong>End Date:</strong> {selectedTask.endDate ? dayjs(selectedTask.endDate).format("YYYY-MM-DD") : "N/A"}</p>
               <p><strong>Priority:</strong> {selectedTask.priority}</p>
               <p><strong>Remarks:</strong> {selectedTask.remarks}</p>
               <p><strong>Status:</strong> {selectedTask.status}</p>
@@ -379,3 +427,4 @@ function Todo() {
 }
 
 export default Todo;
+
