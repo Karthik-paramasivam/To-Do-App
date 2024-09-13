@@ -68,7 +68,7 @@ function Todo() {
       setTasksList(JSON.parse(storedTasks));
       setFilteredTasks(tasks);
     }
-  }, [filteredTasks]);
+  }, []);
 
   const updateLocalStorage = (tasks) => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
